@@ -3,7 +3,8 @@
   coll of ranges, and the matching schemes of RFC 4647.
 
   A priority list is a vector of maps of :range and :weight, in order of
-  weight. Every function here compares subtags ignoring case.
+  weight. The functions that match take ranges and tags in lower case,
+  which the callers make once rather than for each comparison.
 
   TODO: these, which need the registry:
 
@@ -65,100 +66,154 @@
        (sort-by :weight >)
        vec))
 
-(defn subtags
-  "The subtags of the range or tag `s` in lower case."
-  [s]
-  (str/split (syntax/lower s) #"-" -1))
+(defn lower-text
+  "The `x` in lower case when it's text, or else nil."
+  [x]
+  (when (string? x)
+    (syntax/lower x)))
+
+(defn lower-priority-list
+  "The priority list of `x` with each range in lower case."
+  [x]
+  (mapv #(update % :range syntax/lower) (priority-list x)))
 
 ;; RFC 4647, section 3.2
 (defn basic-range
   "The basic range of the `range`: * when it starts with *, or else the
   range without its wildcards."
   [range]
-  (if (str/starts-with? range "*")
-    "*"
-    (str/join "-" (remove #{"*"} (str/split range #"-")))))
+  (cond
+    (str/starts-with? range "*") "*"
+    (str/includes? range "*")    (str/join "-" (remove #{"*"} (str/split range #"-")))
+    :else                        range))
 
 (defn basic-priority-list
-  "The priority list of `x` with each range mapped to a basic range."
+  "The priority list of `x` with each range in lower case and mapped to a
+  basic range."
   [x]
-  (mapv #(update % :range basic-range) (priority-list x)))
+  (mapv #(update % :range basic-range) (lower-priority-list x)))
+
+;; a split on a string rather than a regex, which the JDK does without
+;; regex machinery, as that was most of the time of extended filtering
+(defn subtags
+  "The subtags of the range or tag `s`, as an array."
+  [s]
+  #?(:clj  (.split ^String s "-" -1)
+     :cljs (.split s "-")))
 
 ;; RFC 4647, section 3.3.1
 (defn basic-match?
-  "Whether the basic `range` matches the `tag`: when it's *, the tag
-  itself, or the tag up to a hyphen. Nothing matches a tag that isn't
-  text, e.g. nil."
+  "Whether the basic `range` matches the `tag`, both in lower case: when
+  it's *, the tag itself, or the tag up to a hyphen."
   [range tag]
-  (and (string? range)
-       (string? tag)
-       (let [range (syntax/lower range)
-             tag   (syntax/lower tag)]
-         (or (= "*" range)
-             (= range tag)
-             (str/starts-with? tag (str range "-"))))))
+  (or (= "*" range)
+      (= range tag)
+      (and (str/starts-with? tag range)
+           (= \- (nth tag (count range))))))
 
-;; RFC 4647, section 3.3.2, steps 3 and 4
+;; RFC 4647, section 3.3.2, steps 3 and 4, by index rather than by seq,
+;; which made extended filtering three times slower
 (defn subtags-match?
-  "Whether the subtags `rs` of an extended range match the subtags `ts` of
-  a tag, both without their first subtag."
-  [rs ts]
-  (loop [[r & more-rs :as rs] rs
-         [t & more-ts :as ts] ts]
+  "Whether the array of subtags `rs` of an extended range matches the
+  array of subtags `ts` of a tag, from the second subtag of each."
+  [^objects rs ^objects ts]
+  (loop [i 1
+         j 1]
     (cond
-      (empty? rs)     true
-      (= "*" r)       (recur more-rs ts)
-      (empty? ts)     false
-      (= r t)         (recur more-rs more-ts)
-      (= 1 (count t)) false
-      :else           (recur rs more-ts))))
+      (== i (alength rs))         true
+      (= "*" (aget rs i))         (recur (inc i) j)
+      (== j (alength ts))         false
+      (= (aget rs i) (aget ts j)) (recur (inc i) (inc j))
+      (== 1 (count (aget ts j)))  false
+      :else                       (recur i (inc j)))))
 
 ;; RFC 4647, section 3.3.2
 (defn extended-match?
-  "Whether the extended `range` matches the `tag`: when their first
-  subtags match and the tag has each later subtag of the range in order,
-  without skipping a singleton. Nothing matches a tag that isn't text."
-  [range tag]
-  (and (string? range)
-       (string? tag)
-       (let [[r & rs] (subtags range)
-             [t & ts] (subtags tag)]
-         (and (or (= "*" r) (= r t))
-              (subtags-match? rs ts)))))
+  "Whether an extended range matches a tag, by their arrays of lower-case
+  subtags `rs` and `ts`: when their first subtags match and the tag has
+  each later subtag of the range in order, without skipping a singleton."
+  [^objects rs ^objects ts]
+  (let [r (aget rs 0)]
+    (and (or (= "*" r) (= r (aget ts 0)))
+         (subtags-match? rs ts))))
+
+;; the tags of a filter split once rather than for each range, which made
+;; extended filtering twice as slow in Node
+(def basic
+  "How basic filtering matches: a range with a tag, both in lower case."
+  {:prepare identity
+   :match?  basic-match?})
+
+(def extended
+  "How extended filtering matches: the subtags of a range with those of a
+  tag, both in lower case."
+  {:prepare subtags
+   :match?  extended-match?})
+
+(defn text-match?
+  "Whether the `range` matches the `tag` by the `scheme`, ignoring case.
+  Nothing matches a range or tag that isn't text, e.g. nil."
+  [{:keys [prepare match?] :as scheme} range tag]
+  (let [range (lower-text range)
+        tag   (lower-text tag)]
+    (boolean (and range tag (match? (prepare range) (prepare tag))))))
 
 (defn specificity
   "The number of subtags of the `range` that aren't *."
   [range]
   (count (remove #{"*"} (subtags range))))
 
+(defn prepare-ranges
+  "The lower-case `priority-list` with each range also as `prepare` returns
+  it, under :prepared."
+  [prepare priority-list]
+  (mapv #(assoc % :prepared (prepare (:range %))) priority-list))
+
 ;; RFC 2616, section 14.4, the longest range that matches
 (defn acceptable?
-  "Whether the `tag` has a weight above 0 in the `priority-list`, or none.
-  Its weight is that of the most specific range that `match?` says matches
-  it, or the lowest weight when several tie."
+  "Whether the `tag` has a weight above 0 in the prepared `priority-list`,
+  or none. Its weight is that of the most specific range that `match?`
+  says matches it, or the lowest weight when several tie."
   [match? priority-list tag]
-  (let [best (->> priority-list
-                  (filter #(match? (:range %) tag))
-                  (sort-by (juxt #(- (specificity (:range %))) :weight))
-                  first)]
-    (or (nil? best) (pos? (:weight best)))))
+  ;; only a range of weight 0 can rule a tag out
+  (or (not-any? (comp zero? :weight) priority-list)
+      (let [best (->> priority-list
+                      (filter #(match? (:prepared %) tag))
+                      (sort-by (juxt #(- (specificity (:range %))) :weight))
+                      first)]
+        (or (nil? best) (pos? (:weight best))))))
+
+(defn priority
+  "The index of the first range of weight above 0 in the prepared
+  `priority-list` that `match?` says matches the `tag`, or nil."
+  [match? priority-list tag]
+  (reduce-kv (fn [_ i {:keys [prepared weight]}]
+               (when (and (pos? weight) (match? prepared tag))
+                 (reduced i)))
+             nil
+             priority-list))
+
+(defn ranked
+  "The item `x` with the priority of its tag, which `f` returns, or nil
+  when no range of the prepared `priority-list` matches the tag by the
+  `scheme` or the tag isn't acceptable."
+  [{:keys [prepare match?] :as scheme} priority-list f x]
+  (let [tag (some-> (lower-text (f x)) prepare)
+        i   (some->> tag (priority match? priority-list))]
+    (when (and i (acceptable? match? priority-list tag))
+      [i x])))
 
 ;; RFC 4647, section 3.3
 (defn filter-tags
-  "The items of `coll` whose tag a range of the `priority-list` matches,
-  in order of priority. The `f` returns the tag of an item, and `match?`
-  matches it with a range. Items of tags that aren't acceptable are left
-  out."
-  [match? priority-list f coll]
-  (->> (for [{:keys [range weight]} priority-list
-             :when (pos? weight)
-             x     coll
-             :let  [tag (f x)]
-             :when (and (match? range tag)
-                        (acceptable? match? priority-list tag))]
-         x)
-       distinct
-       vec))
+  "The items of `coll` whose tag a range of the lower-case `priority-list`
+  matches by the `scheme`, in order of priority. The `f` returns the tag of
+  an item."
+  [scheme priority-list f coll]
+  (let [priority-list (prepare-ranges (:prepare scheme) priority-list)]
+    (->> coll
+         (keep #(ranked scheme priority-list f %))
+         (sort-by first)
+         (mapv second))))
 
 ;; RFC 4647, section 3.4
 (defn truncate
@@ -179,26 +234,36 @@
        (take-while seq)
        (map #(str/join "-" %))))
 
+(defn first-by-tag
+  "Each tag of the items of `coll`, which `f` returns, in lower case to the
+  first item with that tag."
+  [f coll]
+  (reduce (fn [m x]
+            (let [tag (lower-text (f x))]
+              (cond-> m
+                (and tag (not (contains? m tag))) (assoc tag x))))
+          {}
+          coll))
+
 ;; RFC 4647, section 3.4
 (defn lookup
-  "The first item of `coll` whose tag equals a range of the `priority-list`
-  or one of its fallbacks and is acceptable, or nil. The `f` returns the
-  tag of an item. The range * is skipped."
+  "The first item of `coll` whose tag equals a range of the lower-case
+  `priority-list` or one of its fallbacks and is acceptable, or nil. The
+  `f` returns the tag of an item. The range * is skipped."
   [priority-list f coll]
-  (first (for [{:keys [range weight]} priority-list
-               :when (and (pos? weight) (not= "*" range))
-               fallback (fallbacks range)
-               x        coll
-               :let     [tag (f x)]
-               :when    (and (string? tag)
-                             (= (syntax/lower fallback) (syntax/lower tag))
-                             (acceptable? basic-match? priority-list tag))]
-           x)))
+  (let [priority-list (prepare-ranges identity priority-list)
+        items         (first-by-tag f coll)]
+    (first (for [{:keys [range weight]} priority-list
+                 :when (and (pos? weight) (not= "*" range))
+                 fallback (fallbacks range)
+                 :when (and (contains? items fallback)
+                            (acceptable? basic-match? priority-list fallback))]
+             (items fallback)))))
 
 (comment
   (priority-list "da, en-gb;q=0.8, en;q=0.7")
   (fallbacks "zh-Hant-CN-x-private1-private2")
-  (lookup (priority-list "da-DK, en;q=0.8") identity ["da" "en"])
-  (filter-tags extended-match? (priority-list "de-*-DE") :lang
+  (lookup (basic-priority-list "da-DK, en;q=0.8") identity ["da" "en"])
+  (filter-tags extended (lower-priority-list "de-*-DE") :lang
                [{:lang "de-Latn-DE"} {:lang "de"} {}])
   #_.)

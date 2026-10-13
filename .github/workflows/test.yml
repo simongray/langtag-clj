@@ -51,7 +51,7 @@ jobs:
           node target/node-tests.js
 
       - name: Lint
-        run: clojure -Sdeps '{:deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}}' -M -m clj-kondo.main --lint src test
+        run: clojure -Sdeps '{:deps {clj-kondo/clj-kondo {:mvn/version "2026.08.04"}}}' -M -m clj-kondo.main --lint src test dev
 
   floor:
     name: Java 11

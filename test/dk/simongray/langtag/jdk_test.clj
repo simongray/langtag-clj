@@ -17,7 +17,8 @@
   - In extended filtering de-* doesn't match de, and lookup reads * in a
     range as any subtag.
   - Before Java 18, filtering with the range * returns every tag in the
-    order given."
+    order given.
+  - Filtering returns a tag once, even when the tags have it twice."
   (:require [clojure.string :as str]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
@@ -102,8 +103,8 @@
            (Locale/filterTags (->jdk s) ts Locale$FilteringMode/MAP_EXTENDED_RANGES)))))
 
 (defspec extended-filtering-as-the-jdk-does-it 3000
-  (prop/for-all [s  (g/accept-language (gen/such-that #(not (str/ends-with? % "-*"))
-                                                      g/extended-range))
+  (prop/for-all [s  (g/accept-language (gen/fmap #(str/replace % #"(-\*)+$" "")
+                                                 g/extended-range))
                  ts g/tags]
     (or (star-before-java-18? s)
         (= (langtag/extended-filter s ts)

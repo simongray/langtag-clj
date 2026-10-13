@@ -16,9 +16,10 @@
   (testing "a range matches whole subtags"
     (is (not (langtag/basic-match? "de" "del")))
     (is (not (langtag/basic-match? "de-CH" "de"))))
-  (testing "in order of priority, each tag once"
-    (is (= ["fr-CA" "en-US" "en"]
-           (langtag/basic-filter "fr, en" ["en-US" "fr-CA" "en" "en-US"])))))
+  (testing "in order of priority, each item once"
+    (is (= ["fr-CA" "en-US" "en" "en-US"]
+           (langtag/basic-filter "fr, en" ["en-US" "fr-CA" "en" "en-US"])))
+    (is (= ["en-US" "en"] (langtag/basic-filter "en-US, en" ["en" "en-US"])))))
 
 (def extended-matches
   "The tags that de-*-DE matches in RFC 4647, section 3.3.2."

@@ -156,9 +156,11 @@ Development
 -----------
 
 ```bash
-clojure -X:test                 # the tests on the JVM
-npm install                     # once, for the Node tests
-clojure -M:cljs compile test    # the tests in Node
+clojure -X:test                                       # the tests on the JVM
+npm install                                           # once, for the Node tests
+clojure -M:cljs compile test                          # the tests in Node
+clojure -M:bench -m dk.simongray.langtag.bench        # benchmarks on the JVM
+clojure -M:cljs release bench && node target/bench.js # benchmarks in Node
 ```
 
 Besides the examples of RFC 5646 and RFC 4647, the tests compare random

@@ -42,6 +42,9 @@ Decisions
   MAP_EXTENDED_RANGES mode. So en-*-US looks up en-US.
 - **Lookup returns nil when nothing matches.** Section 3.4.1 leaves the
   default to the protocol, and `(or (lookup ...) "en")` is short enough.
+- **Filtering returns every matching item once,** at the first range that
+  matches it, as `clojure.core/filter` would. The JDK returns each tag
+  once instead, which would merge documents that share a tag.
 - **Matching takes an optional key function,** as `sort-by` does, so that
   DanNet can pick a label by its language and get the label back. An item
   whose tag is nil, e.g. a label without a language, matches nothing.

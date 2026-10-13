@@ -106,13 +106,13 @@
   3.3.1): when it's *, the tag itself, or the start of the tag up to a
   hyphen."
   [range tag]
-  (matching/basic-match? range tag))
+  (matching/text-match? matching/basic range tag))
 
 (defn extended-match?
   "Whether the extended language `range` matches the `tag` (RFC 4647,
   section 3.3.2), e.g. de-*-DE or de-DE matches de-Latn-DE."
   [range tag]
-  (matching/extended-match? range tag))
+  (matching/text-match? matching/extended range tag))
 
 (defn basic-filter
   "The `tags` that a range of the `priority-list` matches by basic
@@ -133,7 +133,7 @@
   ([priority-list tags]
    (basic-filter priority-list identity tags))
   ([priority-list f coll]
-   (matching/filter-tags matching/basic-match?
+   (matching/filter-tags matching/basic
                          (matching/basic-priority-list priority-list)
                          f
                          coll)))
@@ -150,8 +150,8 @@
   ([priority-list tags]
    (extended-filter priority-list identity tags))
   ([priority-list f coll]
-   (matching/filter-tags matching/extended-match?
-                         (matching/priority-list priority-list)
+   (matching/filter-tags matching/extended
+                         (matching/lower-priority-list priority-list)
                          f
                          coll)))
 
