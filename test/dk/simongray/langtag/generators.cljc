@@ -4,7 +4,8 @@
   Most subtags come from small sets, so that ranges and tags often match.
   Their case is random, since case carries no meaning."
   (:require [clojure.string :as str]
-            [clojure.test.check.generators :as gen]))
+            [clojure.test.check.generators :as gen]
+            [dk.simongray.langtag.impl.registry :as registry]))
 
 (def letters
   "The ASCII letters."
@@ -177,3 +178,27 @@
 (def tags
   "A few well-formed tags, distinct but for case."
   (distinct-by-lower (gen/one-of [tag short-tag]) 0 8))
+
+(defn registered
+  "One of the subtags `xs` of the registry, or often one of the `deprecated`
+  ones that have a Preferred-Value."
+  [xs deprecated]
+  (gen/frequency [[3 (gen/elements (vec xs))]
+                  [1 (gen/elements (vec (keys deprecated)))]]))
+
+(def registered-tag
+  "A valid tag in random case, whose subtags are often deprecated or
+  extlangs."
+  (let [{:keys [extlangs scripts regions variants preferred]} @registry/table
+        maybe #(gen/one-of [(gen/return nil) %])]
+    (gen/let [language   (registered (concat (keys extlangs) (vals extlangs) ["en" "da" "qaa"])
+                                     (:language preferred))
+              extlang    (maybe (gen/elements (vec (keys extlangs))))
+              script     (maybe (gen/elements (vec scripts)))
+              region     (maybe (registered regions (:region preferred)))
+              variants   (distinct-by-lower (registered variants (:variant preferred)) 0 2)
+              extensions extensions
+              recase     random-case]
+      (recase (str/join "-" (remove nil? (concat [language extlang script region]
+                                                 variants
+                                                 extensions)))))))

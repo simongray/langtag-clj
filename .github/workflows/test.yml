@@ -34,6 +34,13 @@ jobs:
             .cpcache
           key: clojure-${{ runner.os }}-${{ hashFiles('deps.edn') }}
 
+      # the table in resources must be the one that the registry in
+      # dev-resources gives
+      - name: Registry table
+        run: |
+          clojure -X:tables
+          git diff --exit-code resources
+
       - name: JVM tests
         run: clojure -X:test
 

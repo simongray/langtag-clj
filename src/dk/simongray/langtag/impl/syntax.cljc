@@ -30,9 +30,7 @@
 ;; grammar in section 2.1
 (def grandfathered
   "Each grandfathered tag in lower case, to the tag as the registry writes
-  it.
-
-  TODO: their Preferred-Value in the registry, e.g. tlh for i-klingon."
+  it."
   (into {}
         (map (juxt lower identity))
         ["en-GB-oed" "i-ami" "i-bnn" "i-default" "i-enochian" "i-hak"
@@ -137,10 +135,7 @@
 ;; RFC 5646, section 2.2.5, rule 5, and section 2.2.6, rule 3
 (defn duplicate
   "The reason that a `subtag` of kind `k` can't follow the `parse` because
-  it repeats a variant or singleton, or nil.
-
-  TODO: the other rules of validity (section 2.2.9), which need the
-  registry."
+  it repeats a variant or singleton, or nil."
   [{:keys [tag]} k subtag]
   (case k
     :variant   (when (some #{subtag} (:variants tag)) :duplicate-variant)
@@ -244,6 +239,14 @@
   (let [parsed (:tag (read-tag (join m)))]
     (when (= (lowered m) (lowered parsed))
       parsed)))
+
+(defn tag-map
+  "The map of the tag `x` (a map or text) in canonical case, or nil when it
+  isn't well formed."
+  [x]
+  (if (map? x)
+    (canonical x)
+    (:tag (read-tag x))))
 
 (comment
   (read-tag "zh-yue-Hant-HK-u-co-pinyin-x-private")

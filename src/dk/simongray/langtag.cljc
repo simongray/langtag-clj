@@ -58,10 +58,8 @@
   (:error (syntax/read-tag s)))
 
 (defn well-formed?
-  "Whether parse accepts the tag `s`.
-
-  TODO: valid tags (RFC 5646, section 2.2.9), whose subtags must be in the
-  registry."
+  "Whether parse accepts the tag `s`. For whether the registry has its
+  subtags too, see registry/valid?."
   [s]
   (some? (parse s)))
 
@@ -77,13 +75,10 @@
       ;; => \"sr-Latn-RS\"
 
   Extensions come in the order of their singletons, as in the canonical
-  form of section 4.5.
-
-  TODO: the rest of the canonical form, e.g. he for iw, and the extlang
-  form, e.g. zh-hak-CN for hak-CN, which need the registry."
+  form of section 4.5. For the rest of that form, e.g. he for iw, see
+  registry/canonical-form."
   [x]
-  (some-> (if (map? x) (syntax/canonical x) (parse x))
-          syntax/join))
+  (some-> (syntax/tag-map x) syntax/join))
 
 (defn priority-list
   "The language priority list of `x` (RFC 4647, section 2.3): a vector of
@@ -162,13 +157,11 @@
   range * and maps a range with * in it to a basic range (section 3.2).
   As in basic-filter, a tag of weight 0 is left out. When no tag matches,
   the default is up to you (section 3.4.1), e.g. (or (lookup ...) \"en\").
-
-  TODO: equivalent tags, e.g. he for the deprecated iw, which need the
-  registry."
+  For a lookup that finds he for the deprecated iw, see registry/lookup."
   ([priority-list tags]
    (lookup priority-list identity tags))
   ([priority-list f coll]
-   (matching/lookup priority-list f coll)))
+   (matching/lookup matching/basic priority-list f coll)))
 
 (comment
   (parse "zh-yue-Hant-HK-u-co-pinyin-x-private")

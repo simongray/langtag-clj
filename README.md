@@ -15,7 +15,11 @@ language of a document.
 - **Tags as maps.** A tag parses into a map of its language, script,
   region and other subtags. The map writes back as a tag in canonical
   case.
-- **Errors as data.** You can ask why a tag isn't well formed.
+- **Errors as data.** You can ask why a tag isn't well formed, or why it
+  isn't valid, e.g. that en-UK should be en-GB.
+- **The registry when you need it.** Validity and the canonical form come
+  from the IANA registry, in a namespace of its own. A ClojureScript build
+  only carries the registry when it uses that namespace.
 - **The same results everywhere.** One codebase runs on the JVM, in Node
   and in browsers, since JavaScript has no matching of its own. On the
   JVM, the tests compare it with the JDK's.
@@ -73,7 +77,8 @@ why, use `langtag/error`:
 
 To check a tag, use `langtag/well-formed?`. Besides the grammar, it checks
 the two rules of RFC 5646 that need no registry: no variant or extension
-may appear twice.
+may appear twice. To check its subtags as well, see
+[the registry](#the-registry).
 
 Matching
 --------
@@ -133,24 +138,58 @@ specific range that matches it, as in HTTP/1.1
 ([RFC 2616](https://www.rfc-editor.org/rfc/rfc2616#section-14.4)), so
 `"en, en-GB;q=0"` accepts all English but British English.
 
+The registry
+------------
+
+The root namespace works from the syntax of a tag alone. The `registry`
+namespace adds what needs the
+[IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry):
+whether a tag is valid, i.e. whether the registry has each of its
+subtags, and the canonical form of a tag.
+
+```clojure
+(require '[dk.simongray.langtag.registry :as registry])
+
+(registry/error "en-UK")
+;; => {:reason :unregistered-subtag :subtag "UK" :index 1}
+
+(registry/canonical-form "iw-IL")
+;; => "he-IL"
+
+(registry/extlang-form "yue-HK")
+;; => "zh-yue-HK"
+```
+
+The canonical form replaces deprecated tags and subtags with the ones that
+the registry prefers. The extlang form also puts a language such as
+Cantonese (yue) after its macrolanguage (zh), as the registry allows for a
+few of them.
+
+The namespace has its own `lookup`, `basic-filter` and `extended-filter`,
+which compare ranges and tags in extlang form. So a browser that asks for
+iw gets your he page, and one that asks for yue-HK falls back to zh:
+
+```clojure
+(registry/lookup "yue-HK, en;q=0.8" ["en" "zh"])
+;; => "zh"
+```
+
+The library carries the registry of `registry/file-date`, and each update
+of the registry means a new release.
+
 Not yet
 -------
 
-The library works from the syntax of a tag alone. The full standard also
-needs the
-[IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry)
-for these:
+The registry has more than the library uses yet:
 
-- validity (RFC 5646, section 2.2.9), i.e. whether each subtag is
-  registered
-- the canonical form of section 4.5, which replaces deprecated subtags,
-  e.g. iw with he
-- the extlang form, e.g. zh-hak-CN for hak-CN
 - scripts that go without saying (Suppress-Script), e.g. en rather than
   en-Latn
-- macrolanguages, e.g. that cmn is a kind of zh
-- the subtags of the -u- (RFC 6067) and -t- (RFC 6497) extensions, which
-  the parser keeps as plain subtags
+- macrolanguages beyond the extlang form, e.g. that nb is a kind of no
+- the tag that a variant should follow (its Prefix), e.g. sl for rozaj
+
+The parser keeps the subtags of the -u- (RFC 6067) and -t- (RFC 6497)
+extensions as plain subtags. Their keys come from CLDR rather than the
+registry, so reading them may come later.
 
 Development
 -----------
@@ -161,17 +200,26 @@ npm install                                           # once, for the Node tests
 clojure -M:cljs compile test                          # the tests in Node
 clojure -M:bench -m dk.simongray.langtag.bench        # benchmarks on the JVM
 clojure -M:cljs release bench && node target/bench.js # benchmarks in Node
+dev/fetch.sh && clojure -X:tables                     # a newer registry
 ```
 
+IANA keeps no older copies of the registry, so the repository keeps the one
+in dev-resources that the table in resources is made from. After an
+update, commit both.
+
 Besides the examples of RFC 5646 and RFC 4647, the tests compare random
-tags and priority lists with the JDK. The docstring of
+tags and priority lists with the JDK, and the registry namespace with each
+record of the registry. The docstring of
 [jdk_test.clj](test/dk/simongray/langtag/jdk_test.clj) lists where the JDK
 differs.
 
-The public namespace is the root. The internal ones are under `impl`:
+The public namespaces are the root and `registry`. The internal ones are
+under `impl`:
 
 - `impl.syntax`, which parses and writes tags
 - `impl.matching`, which reads priority lists and matches tags
+- `impl.registry`, which reads the registry's table and puts tags in
+  canonical form
 
 License
 -------

@@ -20,11 +20,13 @@
     order given.
   - Filtering returns a tag once, even when the tags have it twice."
   (:require [clojure.string :as str]
+            [clojure.test :refer [deftest is]]
             [clojure.test.check.clojure-test :refer [defspec]]
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [dk.simongray.langtag :as langtag]
-            [dk.simongray.langtag.generators :as g])
+            [dk.simongray.langtag.generators :as g]
+            [dk.simongray.langtag.impl.registry :as registry])
   (:import [java.util IllformedLocaleException Locale$Builder Locale$FilteringMode
             Locale$LanguageRange Locale]))
 
@@ -109,6 +111,24 @@
     (or (star-before-java-18? s)
         (= (langtag/extended-filter s ts)
            (Locale/filterTags (->jdk s) ts Locale$FilteringMode/EXTENDED_FILTERING)))))
+
+(defn jdk-equivalents
+  "The ranges that the JDK's priority list of the range `s` has, which are
+  `s` and its equivalents by the JDK's copy of the registry."
+  [s]
+  (set (map #(.getRange ^Locale$LanguageRange %) (Locale$LanguageRange/parse s))))
+
+;; the JDK's copy of the registry is older, so it has no equivalents for
+;; the subtags deprecated or the extlangs added since
+(deftest preferred-values-as-the-jdk-has-them
+  (let [{:keys [extlangs preferred]} @registry/table]
+    (is (empty? (for [[s v] (concat (:language preferred)
+                                    (for [[k v] (:region preferred)] [(str "und-" k) (str "und-" v)])
+                                    (:tag preferred)
+                                    (for [k (keys extlangs)] [(str (extlangs k) "-" k) k]))
+                      :let  [theirs (jdk-equivalents s)]
+                      :when (not (or (= #{s} theirs) (theirs v)))]
+                  [s v theirs])))))
 
 (defspec lookup-as-the-jdk-does-it 3000
   (prop/for-all [s  (g/accept-language g/basic-range)

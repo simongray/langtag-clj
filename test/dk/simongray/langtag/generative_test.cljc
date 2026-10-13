@@ -6,7 +6,8 @@
             [clojure.test.check.generators :as gen]
             [clojure.test.check.properties :as prop]
             [dk.simongray.langtag :as langtag]
-            [dk.simongray.langtag.generators :as g]))
+            [dk.simongray.langtag.generators :as g]
+            [dk.simongray.langtag.registry :as registry]))
 
 (defn- subtag-counts
   "How often each subtag of the tag `s` occurs in it, ignoring case."
@@ -44,6 +45,27 @@
            (every? (fn [t] (some #(langtag/basic-match? (:range %) t)
                                  (langtag/priority-list s)))
                    basic)))))
+
+(defspec valid-tags-stay-valid-in-either-form 2000
+  (prop/for-all [s (gen/one-of [g/registered-tag g/grandfathered])]
+    (let [canonical (registry/canonical-form s)
+          extlang   (registry/extlang-form s)]
+      (and (registry/valid? s)
+           (registry/valid? canonical)
+           (registry/valid? extlang)
+           (= canonical (registry/canonical-form canonical) (registry/canonical-form extlang))
+           (= extlang (registry/extlang-form canonical))))))
+
+(defspec tags-match-their-other-forms 1000
+  (prop/for-all [s (gen/one-of [g/registered-tag g/grandfathered])]
+    (let [forms [s (registry/canonical-form s) (registry/extlang-form s)]]
+      (every? (fn [[range tag]]
+                (and (registry/basic-match? range tag)
+                     (registry/extended-match? range tag)
+                     (= tag (registry/lookup range [tag]))))
+              (for [range forms
+                    tag   forms]
+                [range tag])))))
 
 (defspec lookup-finds-a-tag-that-basic-filtering-finds-or-a-fallback 2000
   (prop/for-all [s  (g/accept-language g/basic-range)

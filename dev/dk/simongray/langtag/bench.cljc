@@ -11,7 +11,8 @@
   microseconds, and (profile :basic-filter 10) the file of a flame graph."
   (:require #?@(:clj [[clj-async-profiler.core :as prof]
                       [criterium.core :as criterium]])
-            [dk.simongray.langtag :as langtag])
+            [dk.simongray.langtag :as langtag]
+            [dk.simongray.langtag.registry :as registry])
   #?(:clj (:import [java.util Locale Locale$LanguageRange])))
 
 (def header
@@ -36,7 +37,11 @@
     :lookup          #(langtag/lookup header ["da" "en"])
     :lookup-1000     #(langtag/lookup "sv-FI, nb;q=0.5" documents)
     :basic-filter    #(langtag/basic-filter header documents)
-    :extended-filter #(langtag/extended-filter header documents)}
+    :extended-filter #(langtag/extended-filter header documents)
+    :valid           #(registry/valid? "zh-yue-Hant-HK-u-co-pinyin-x-private")
+    :canonical-form  #(registry/canonical-form "zh-yue-Hant-HK-u-co-pinyin-x-private")
+    :registry-lookup #(registry/lookup header ["da" "en"])
+    :registry-filter #(registry/basic-filter header documents)}
    #?(:clj
       {:jdk-parse         #(Locale/forLanguageTag "zh-yue-Hant-HK-u-co-pinyin-x-private")
        :jdk-priority-list #(Locale$LanguageRange/parse header)

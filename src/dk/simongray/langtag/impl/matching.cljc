@@ -6,11 +6,11 @@
   weight. The functions that match take ranges and tags in lower case,
   which the callers make once rather than for each comparison.
 
-  TODO: these, which need the registry:
+  TODO: matching by these fields of the registry, beyond the extlang form
+  that the registry namespace matches in:
 
-  - equivalent tags, e.g. he for the deprecated iw
   - Suppress-Script, e.g. en for en-Latn
-  - macrolanguages, e.g. zh for cmn"
+  - Macrolanguage, e.g. no for nb"
   (:require [clojure.string :as str]
             [dk.simongray.langtag.impl.syntax :as syntax]))
 
@@ -154,6 +154,14 @@
    :prepare subtags
    :match?  extended-match?})
 
+(defn in-form
+  "The `scheme` with each of its ranges in the form that `form` returns,
+  without the ranges that then repeat an earlier one."
+  [scheme form]
+  (update scheme :ranges (fn [ranges]
+                           (fn [x]
+                             (distinct-ranges (map #(update % :range form) (ranges x)))))))
+
 (defn text-match?
   "Whether the `range` matches the `tag` by the `scheme`, ignoring case.
   Nothing matches a range or tag that isn't text, e.g. nil."
@@ -251,22 +259,22 @@
 
 ;; RFC 4647, section 3.4
 (defn lookup
-  "The first item of `coll` whose tag equals a basic range of the priority
-  list of `x` or one of its fallbacks and is acceptable, or nil. The `f`
-  returns the tag of an item. The range * is skipped."
-  [x f coll]
-  (let [priority-list (prepare-ranges identity (basic-priority-list x))
+  "The first item of `coll` whose tag equals a range of the priority list
+  of `x` by the basic `scheme`, or one of its fallbacks, and is acceptable,
+  or nil. The `f` returns the tag of an item. The range * is skipped."
+  [{:keys [ranges prepare match?]} x f coll]
+  (let [priority-list (prepare-ranges prepare (ranges x))
         items         (first-by-tag f coll)]
     (first (for [{:keys [range weight]} priority-list
                  :when (and (pos? weight) (not= "*" range))
                  fallback (fallbacks range)
                  :when (and (contains? items fallback)
-                            (acceptable? basic-match? priority-list fallback))]
+                            (acceptable? match? priority-list fallback))]
              (items fallback)))))
 
 (comment
   (priority-list "da, en-gb;q=0.8, en;q=0.7")
   (fallbacks "zh-Hant-CN-x-private1-private2")
-  (lookup "da-DK, en;q=0.8" identity ["da" "en"])
+  (lookup basic "da-DK, en;q=0.8" identity ["da" "en"])
   (filter-tags extended "de-*-DE" :lang [{:lang "de-Latn-DE"} {:lang "de"} {}])
   #_.)

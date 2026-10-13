@@ -1,8 +1,8 @@
-The minimal version of langtag-clj
-==================================
+The design of langtag-clj
+=========================
 
-This records the design of version 0.1.0, what the full version would add
-and who would use it.
+This records the design of version 0.1.0, of the registry namespace after
+it, what isn't done yet and who would use it.
 
 Decisions
 ---------
@@ -49,29 +49,51 @@ Decisions
   DanNet can pick a label by its language and get the label back. An item
   whose tag is nil, e.g. a label without a language, matches nothing.
 
-Not yet: the full version
--------------------------
+The registry
+------------
 
-These need the
-[IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry):
+The `registry` namespace adds validity, the canonical form and the extlang
+form by the
+[IANA Language Subtag Registry](https://www.iana.org/assignments/language-subtag-registry/language-subtag-registry).
+[registry-2026.md](registry-2026.md) works out what it needs from the
+registry and how small that can be.
 
-- validity (RFC 5646, section 2.2.9)
-- the canonical form by Preferred-Value (section 4.5), e.g. he for iw
-  and tlh for i-klingon
-- the extlang form, e.g. zh-hak-CN for hak-CN
+- **A namespace of its own.** The root namespace doesn't require it, so a
+  ClojureScript build that doesn't either carries none of the table. Its
+  defs call no function when they load, as Closure keeps such a def and
+  whatever it refers to.
+- **A copy of the registry in the repository.** IANA keeps no older copies,
+  so the table can only be made again from one that's committed. The CI
+  makes it again and fails on a diff.
+- **No registry of your own, for now.** A release after each update of the
+  registry is enough until someone needs newer subtags sooner.
+- **Valid means registered subtags and one extlang at most.** Section 2.2.2
+  reserves the places of a second and third extlang. A Prefix is only a
+  SHOULD (section 3.1.8), so validity ignores it, as section 2.2.9 does.
+- **The canonical form as a fixed point.** It replaces a whole tag again
+  after its subtags, since sgn-DD becomes the redundant tag sgn-DE, whose
+  Preferred-Value is gsg. And it replaces a language after its extlang,
+  since the deprecated extlang ajp is its own Preferred-Value, while the
+  language ajp has apc.
+- **Matching in extlang form.** RFC 4647, section 3.2, has a matcher that
+  canonicalizes ranges canonicalize the tags too. The extlang form does
+  that and also keeps the macrolanguage before a language that has one as
+  an extlang, so zh matches yue-HK and yue-HK falls back to zh. Section 4.5
+  of RFC 5646 suggests it for matching.
+
+Not yet
+-------
+
 - Suppress-Script, e.g. en for en-Latn
-- macrolanguages, e.g. that cmn is a kind of zh
-- the details of the -u- (RFC 6067) and -t- (RFC 6497) extensions
+- macrolanguages beyond the extlang form, e.g. that nb is a kind of no
+- the Prefix of a variant, e.g. sl for rozaj, which section 4.1 recommends
+  checking
+
+The details of the -u- (RFC 6067) and -t- (RFC 6497) extensions need
+CLDR's data instead, so they may come later.
 
 The code marks each place where an algorithm stops short of these with a
-TODO, e.g. lookup, which doesn't treat iw and he as the same language.
-Matching with canonical ranges has a rule of its own: RFC 4647, section
-3.2, says to match both the canonical and the original range, or to
-canonicalize the tags too.
-
-[registry-2026.md](registry-2026.md) works out what the full version needs
-from the registry, how small it can be and how a ClojureScript build can
-leave it out.
+TODO.
 
 Who would use it
 ----------------
@@ -97,11 +119,8 @@ a label in en-GB for en. A nil in its languages stands for a label without
 one, which no range matches, so `select-label` would keep its own fallback
 for those.
 
-**podcast-clj.** Its validator checks a language by its shape
-(`language-tag?` in src/dk/simongray/podcast/feed/validate.cljc), so it
-accepts en-US-US and en-a. With `langtag/well-formed?` it would refuse
-both, and `langtag/error` could give the reason in the diagnostic. Apple's
-two or three letters would stay a check of their own, on the :language of
-the parsed tag. The entry "Language, email and media-type values aren't
-validated" in doc/needs-2026.md looks out of date, since validate.cljc
-now checks all three.
+**podcast-clj.** Its validator parses a language with `langtag/parse` and
+gives the reason from `langtag/error` (`language-problem` in
+src/dk/simongray/podcast/feed/validate.cljc). With `registry/error`
+instead, it would also refuse en-UK, a common mistake for en-GB, and
+languages that don't exist.

@@ -22,8 +22,8 @@ What the features need
 
 None of them read the descriptions, comments or dates, which are more than
 half of the registry's 731 KB. The -u- and -t- extensions take their keys
-from CLDR's BCP 47 data rather than from this registry, so they're a
-question of their own.
+from CLDR's BCP 47 data rather than from this registry, so they're left
+for later.
 
 Size
 ----
@@ -79,7 +79,8 @@ How it would ship
 
 As whatwg-url ships its Unicode tables:
 
-- dev/fetch.sh downloads the registry at a pinned File-Date.
+- dev/fetch.sh downloads the newest registry. IANA keeps no older copies,
+  so the repository keeps the one that the tables are made from.
 - A dev script writes the tables to resources/, and the CI writes them
   again and fails on a diff.
 - A macro like whatwg-url's table-text inlines a table as a string literal
@@ -91,9 +92,9 @@ As whatwg-url ships its Unicode tables:
 
 The registry gets new subtags four or five times a year: its records carry
 18 dates of addition since 2023. Each update means a new File-Date and a
-release. A function that reads the registry file itself would let a
-project use a newer registry before then, as whatwg-url does with the
-Public Suffix List.
+release. That's enough for now. A function that reads the registry file
+itself (as whatwg-url has for the Public Suffix List) can wait until a
+project needs subtags before a release has them.
 
 What it would take
 ------------------
@@ -111,13 +112,3 @@ What it would take
 
 That's about as much work again as the minimal version, most of it in the
 generator and the tests.
-
-Questions for Simon
--------------------
-
-1. Should the registry functions get a namespace of their own, or go in
-   the root namespace and rely on dead-code elimination?
-2. Should a project be able to read its own copy of the registry, for
-   subtags newer than the release?
-3. The -u- and -t- extensions need CLDR's data instead. Leave them for
-   later?

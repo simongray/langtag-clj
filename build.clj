@@ -54,25 +54,27 @@
   (b/delete {:path "target"}))
 
 (defn jar
-  "Write the pom and build the jar from the sources in src."
+  "Write the pom and build the jar from the sources in src and the table in
+  resources."
   [_]
   (b/delete {:path class-dir})
-  (b/write-pom {:class-dir class-dir
-                :lib       lib
-                :version   version
-                :basis     @basis
-                :src-dirs  ["src"]
-                :scm       {:url                 scm-url
-                            :connection          "scm:git:git://github.com/simongray/langtag-clj.git"
-                            :developerConnection "scm:git:ssh://git@github.com/simongray/langtag-clj.git"
-                            :tag                 (str "v" version)}
-                :pom-data  [[:description "Language tags (BCP 47) for Clojure and ClojureScript: parsing, canonical case and RFC 4647 matching."]
-                            [:url scm-url]
-                            [:licenses
-                             [:license
-                              [:name "MIT License"]
-                              [:url "https://opensource.org/license/mit"]]]]})
-  (b/copy-dir {:src-dirs   ["src"]
+  (b/write-pom {:class-dir     class-dir
+                :lib           lib
+                :version       version
+                :basis         @basis
+                :src-dirs      ["src"]
+                :resource-dirs ["resources"]
+                :scm           {:url                 scm-url
+                                :connection          "scm:git:git://github.com/simongray/langtag-clj.git"
+                                :developerConnection "scm:git:ssh://git@github.com/simongray/langtag-clj.git"
+                                :tag                 (str "v" version)}
+                :pom-data      [[:description "Language tags (BCP 47) for Clojure and ClojureScript: parsing, validity, canonical form and RFC 4647 matching."]
+                                [:url scm-url]
+                                [:licenses
+                                 [:license
+                                  [:name "MIT License"]
+                                  [:url "https://opensource.org/license/mit"]]]]})
+  (b/copy-dir {:src-dirs   ["src" "resources"]
                :target-dir class-dir})
   (b/jar {:class-dir class-dir
           :jar-file  jar-file}))
