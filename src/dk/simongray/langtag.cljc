@@ -133,10 +133,7 @@
   ([priority-list tags]
    (basic-filter priority-list identity tags))
   ([priority-list f coll]
-   (matching/filter-tags matching/basic
-                         (matching/basic-priority-list priority-list)
-                         f
-                         coll)))
+   (matching/filter-tags matching/basic priority-list f coll)))
 
 (defn extended-filter
   "The `tags` that a range of the `priority-list` matches by extended
@@ -150,10 +147,7 @@
   ([priority-list tags]
    (extended-filter priority-list identity tags))
   ([priority-list f coll]
-   (matching/filter-tags matching/extended
-                         (matching/lower-priority-list priority-list)
-                         f
-                         coll)))
+   (matching/filter-tags matching/extended priority-list f coll)))
 
 (defn lookup
   "The tag in `tags` that best matches the `priority-list` by lookup (RFC
@@ -174,7 +168,7 @@
   ([priority-list tags]
    (lookup priority-list identity tags))
   ([priority-list f coll]
-   (matching/lookup (matching/basic-priority-list priority-list) f coll)))
+   (matching/lookup priority-list f coll)))
 
 (comment
   (parse "zh-yue-Hant-HK-u-co-pinyin-x-private")

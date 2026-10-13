@@ -28,10 +28,10 @@
   #"^[ \t]*([^ \t;]+)(?:[ \t]*;[ \t]*[qQ]=(0(?:\.\d{0,3})?|1(?:\.0{0,3})?))?[ \t]*$")
 
 (defn element
-  "The range and weight of the `element` of an Accept-Language value, or
+  "The range and weight of the element `s` of an Accept-Language value, or
   nil when it doesn't follow the grammar, e.g. when it's empty."
-  [element]
-  (when-let [[_ range qvalue] (re-matches element-pattern element)]
+  [s]
+  (when-let [[_ range qvalue] (re-matches element-pattern s)]
     (when (re-matches range-pattern range)
       {:range range :weight (if qvalue (parse-double qvalue) 1.0)})))
 
@@ -77,7 +77,8 @@
   [x]
   (mapv #(update % :range syntax/lower) (priority-list x)))
 
-;; RFC 4647, section 3.2
+;; RFC 4647, section 3.2; a range without * is returned as it is, since
+;; splitting and joining it made lookup a quarter slower
 (defn basic-range
   "The basic range of the `range`: * when it starts with *, or else the
   range without its wildcards."
@@ -140,14 +141,17 @@
 ;; the tags of a filter split once rather than for each range, which made
 ;; extended filtering twice as slow in Node
 (def basic
-  "How basic filtering matches: a range with a tag, both in lower case."
-  {:prepare identity
+  "How basic filtering matches: a basic range with a tag, both in lower
+  case."
+  {:ranges  basic-priority-list
+   :prepare identity
    :match?  basic-match?})
 
 (def extended
   "How extended filtering matches: the subtags of a range with those of a
   tag, both in lower case."
-  {:prepare subtags
+  {:ranges  lower-priority-list
+   :prepare subtags
    :match?  extended-match?})
 
 (defn text-match?
@@ -205,11 +209,11 @@
 
 ;; RFC 4647, section 3.3
 (defn filter-tags
-  "The items of `coll` whose tag a range of the lower-case `priority-list`
-  matches by the `scheme`, in order of priority. The `f` returns the tag of
-  an item."
-  [scheme priority-list f coll]
-  (let [priority-list (prepare-ranges (:prepare scheme) priority-list)]
+  "The items of `coll` whose tag a range of the priority list of `x` matches
+  by the `scheme`, in order of priority. The `f` returns the tag of an
+  item."
+  [{:keys [ranges prepare] :as scheme} x f coll]
+  (let [priority-list (prepare-ranges prepare (ranges x))]
     (->> coll
          (keep #(ranked scheme priority-list f %))
          (sort-by first)
@@ -235,8 +239,8 @@
        (map #(str/join "-" %))))
 
 (defn first-by-tag
-  "Each tag of the items of `coll`, which `f` returns, in lower case to the
-  first item with that tag."
+  "A map of the lower-case tag that `f` returns for each item of `coll` to
+  the first item with it."
   [f coll]
   (reduce (fn [m x]
             (let [tag (lower-text (f x))]
@@ -247,11 +251,11 @@
 
 ;; RFC 4647, section 3.4
 (defn lookup
-  "The first item of `coll` whose tag equals a range of the lower-case
-  `priority-list` or one of its fallbacks and is acceptable, or nil. The
-  `f` returns the tag of an item. The range * is skipped."
-  [priority-list f coll]
-  (let [priority-list (prepare-ranges identity priority-list)
+  "The first item of `coll` whose tag equals a basic range of the priority
+  list of `x` or one of its fallbacks and is acceptable, or nil. The `f`
+  returns the tag of an item. The range * is skipped."
+  [x f coll]
+  (let [priority-list (prepare-ranges identity (basic-priority-list x))
         items         (first-by-tag f coll)]
     (first (for [{:keys [range weight]} priority-list
                  :when (and (pos? weight) (not= "*" range))
@@ -263,7 +267,6 @@
 (comment
   (priority-list "da, en-gb;q=0.8, en;q=0.7")
   (fallbacks "zh-Hant-CN-x-private1-private2")
-  (lookup (basic-priority-list "da-DK, en;q=0.8") identity ["da" "en"])
-  (filter-tags extended (lower-priority-list "de-*-DE") :lang
-               [{:lang "de-Latn-DE"} {:lang "de"} {}])
+  (lookup "da-DK, en;q=0.8" identity ["da" "en"])
+  (filter-tags extended "de-*-DE" :lang [{:lang "de-Latn-DE"} {:lang "de"} {}])
   #_.)
