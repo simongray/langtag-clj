@@ -1,8 +1,8 @@
 The design of langtag-clj
 =========================
 
-This records the design of version 0.1.0, of the registry namespace after
-it, what isn't done yet and who would use it.
+This records the design of version 0.1.0 and of the registry namespace of
+0.2.0, what isn't done yet and who would use it.
 
 Decisions
 ---------

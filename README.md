@@ -34,7 +34,7 @@ The library needs Clojure 1.11+ and Java 11+. Add the latest release from
 your `deps.edn`:
 
 ```clojure
-dk.simongray/langtag-clj {:mvn/version "0.1.0"}
+dk.simongray/langtag-clj {:mvn/version "0.2.0"}
 ```
 
 For changes that aren't released yet, use the SHA of the latest commit on
