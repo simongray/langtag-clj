@@ -69,22 +69,9 @@ Matching with canonical ranges has a rule of its own: RFC 4647, section
 3.2, says to match both the canonical and the original range, or to
 canonicalize the tags too.
 
-**How the full version would ship the registry.** As whatwg-url does with
-its Unicode tables:
-
-- dev/fetch.sh downloads the registry at a pinned File-Date into
-  dev-resources/, which Git ignores.
-- A dev script (`clojure -X:registry`) writes
-  resources/dk/simongray/langtag/registry.txt, with a line per record and
-  only the fields that the algorithms use: type, subtag, Preferred-Value,
-  Suppress-Script, Macrolanguage and Prefix. That comes to about a tenth
-  of the registry's 732 KB, close to the size of whatwg-url's idna.txt.
-- A `table-text` macro like whatwg-url's reads the table as a resource on
-  the JVM and inlines it as a string literal in ClojureScript. A delay
-  parses it on first use, so the functions that don't need it never load
-  it.
-- The CI writes the table again and fails on a diff. Updating the
-  registry means a new File-Date in fetch.sh and a run of the script.
+[registry-2026.md](registry-2026.md) works out what the full version needs
+from the registry, how small it can be and how a ClojureScript build can
+leave it out.
 
 Who would use it
 ----------------
