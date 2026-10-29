@@ -45,7 +45,8 @@
   {:language 0 :extlang 1 :script 2 :region 3 :variant 4 :extension 5
    :private-use 6})
 
-;; RFC 5646, section 2.1
+;; RFC 5646, section 2.1, by length first, so that a subtag meets one or two
+;; patterns rather than all of them, since this runs for every subtag
 (defn kind
   "The kind of the lower-case `subtag` after the primary language, by its
   length and content, or nil.
@@ -53,13 +54,18 @@
   A subtag after a singleton belongs to its extension or private use
   sequence instead (see in-sequence?)."
   [subtag]
-  (condp re-matches subtag
-    #"^[a-z]{3}$"                           :extlang
-    #"^[a-z]{4}$"                           :script
-    #"^(?:[a-z]{2}|[0-9]{3})$"              :region
-    #"^(?:[a-z0-9]{5,8}|[0-9][a-z0-9]{3})$" :variant
-    #"^[0-9a-wyz]$"                         :extension
-    #"^x$"                                  :private-use
+  (case (count subtag)
+    1         (cond
+                (= "x" subtag)                      :private-use
+                (re-matches #"^[0-9a-wyz]$" subtag) :extension)
+    2         (when (re-matches #"^[a-z]{2}$" subtag) :region)
+    3         (cond
+                (re-matches #"^[a-z]{3}$" subtag) :extlang
+                (re-matches #"^[0-9]{3}$" subtag) :region)
+    4         (cond
+                (re-matches #"^[a-z]{4}$" subtag)         :script
+                (re-matches #"^[0-9][a-z0-9]{3}$" subtag) :variant)
+    (5 6 7 8) (when (re-matches #"^[a-z0-9]{5,8}$" subtag) :variant)
     nil))
 
 (defn failure
@@ -161,15 +167,18 @@
   "The `parse` after the lower-case `subtag` at `index`, or the failure
   when the subtag can't go there."
   [parse index subtag]
-  (let [k (kind subtag)]
-    (cond
-      (nil? parse)                     (or (start subtag)
-                                           (failure :unexpected-subtag index))
-      (in-sequence? parse subtag)      (add-to-sequence parse subtag)
-      (empty-extension? parse)         (failure :empty-extension (dec index))
-      (not (and k (follows? parse k))) (failure :unexpected-subtag index)
-      (duplicate parse k subtag)       (failure (duplicate parse k subtag) index)
-      :else                            (add parse k subtag))))
+  (cond
+    (nil? parse)                (or (start subtag)
+                                    (failure :unexpected-subtag index))
+    (in-sequence? parse subtag) (add-to-sequence parse subtag)
+    (empty-extension? parse)    (failure :empty-extension (dec index))
+    :else
+    (let [k (kind subtag)]
+      (cond
+        (not (and k (follows? parse k))) (failure :unexpected-subtag index)
+        (duplicate parse k subtag)       (failure (duplicate parse k subtag)
+                                                  index)
+        :else                            (add parse k subtag)))))
 
 (defn step
   "The `parse` after the `subtag` at `index`, or the failure, reduced, when
@@ -198,7 +207,9 @@
   (let [s (str s)]
     (if-let [tag (grandfathered (lower s))]
       {:tag {:grandfathered tag}}
-      (let [subtags (str/split s #"-" -1)
+      ;; String.split skips the regex engine for one plain character
+      (let [subtags #?(:clj  (vec (.split ^String s "-" -1))
+                       :cljs (str/split s #"-" -1))
             parse   (-> (reduce-kv step nil subtags)
                         (finish (dec (count subtags))))]
         (if-let [index (get-in parse [:error :index])]
